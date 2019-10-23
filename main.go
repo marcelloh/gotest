@@ -114,10 +114,11 @@ func parse(line string) {
 		isFile = false
 
 		colorYellow()
-		printFullFile(trimmed)
+
+		file := strings.Split(line, ": ")
+		printFullFile(file[0])
 		colorRed()
 
-		file := strings.Split(trimmed, ": ")
 		line = " " + file[1]
 	}
 
@@ -175,7 +176,7 @@ func walker(filterDir, filter string, depth int) error {
 
 				dir, _ := filepath.Abs(filepath.Dir(path))
 				file := strings.ReplaceAll(path, dir+"/", "")
-				testFiles[file] = path
+				testFiles[file] = dir
 			}
 		}
 
@@ -195,7 +196,9 @@ func findTestFiles() {
 }
 
 func printFullFile(file string) {
+	file = strings.TrimSpace(file)
 	fileParts := strings.Split(file, ".go")
 	file = fileParts[0] + ".go"
-	print(testFiles[file])
+
+	print(testFiles[file] + "/" + file + fileParts[1])
 }
