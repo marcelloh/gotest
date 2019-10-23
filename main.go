@@ -13,24 +13,25 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 
-	"github.com/fatih/color"
+	ct "github.com/daviddengcn/go-colortext"
 )
 
 var (
-	success = color.New(color.FgGreen)
-	fail    = color.New(color.FgHiRed)
+	isFile    bool
+	testFiles = map[string]string{}
 )
 
-const paletteEnv = "GOTEST_PALETTE"
-
 func main() {
-	setPalette()
-	enableOnCI()
-	os.Exit(gotest(os.Args[1:]))
+	findTestFiles()
+
+	exitCode := gotest(os.Args[1:])
+	colorWhite()
+	os.Exit(exitCode)
 }
 
 func gotest(args []string) int {
@@ -74,16 +75,15 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 	}
 }
 
-var c *color.Color
-
 func parse(line string) {
 	trimmed := strings.TrimSpace(line)
+	isNextFile := false
 
 	switch {
 	case strings.HasPrefix(trimmed, "=== RUN"):
-		fallthrough
+		colorWhite()
 	case strings.HasPrefix(trimmed, "?"):
-		c = nil
+		colorCyan()
 
 	// success
 	case strings.HasPrefix(trimmed, "--- PASS"):
@@ -91,68 +91,112 @@ func parse(line string) {
 	case strings.HasPrefix(trimmed, "ok"):
 		fallthrough
 	case strings.HasPrefix(trimmed, "PASS"):
-		c = success
+		colorGreen()
 
 	// failure
 	case strings.HasPrefix(trimmed, "--- FAIL"):
-		fallthrough
+		isNextFile = true
+		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
-		c = fail
+		colorRed()
 	}
 
-	if c == nil {
-		fmt.Printf("%s\n", line)
-		return
-	}
-	c.Printf("%s\n", line)
-}
+	if isFile {
+		isFile = false
+		colorYellow()
 
-func enableOnCI() {
-	ci := strings.ToLower(os.Getenv("CI"))
-	switch ci {
-	case "travis":
-		fallthrough
-	case "appveyor":
-		fallthrough
-	case "gitlab_ci":
-		fallthrough
-	case "circleci":
-		color.NoColor = false
+		printFullFile(trimmed)
+		file := strings.Split(trimmed, ": ")
+		colorRed()
+		line = " " + file[1]
+	}
+
+	fmt.Printf("%s\n", line)
+
+	if isNextFile {
+		isFile = true
 	}
 }
 
-func setPalette() {
-	v := os.Getenv(paletteEnv)
-	if v == "" {
-		return
-	}
-	vals := strings.Split(v, ",")
-	if len(vals) != 2 {
-		return
-	}
-	if c, ok := colors[vals[0]]; ok {
-		fail = color.New(c)
-	}
-	if c, ok := colors[vals[1]]; ok {
-		success = color.New(c)
-	}
+func colorRed() {
+	ct.ChangeColor(ct.Red, false, ct.None, false)
 }
 
-var colors = map[string]color.Attribute{
-	"black":     color.FgBlack,
-	"hiblack":   color.FgHiBlack,
-	"red":       color.FgRed,
-	"hired":     color.FgHiRed,
-	"green":     color.FgGreen,
-	"higreen":   color.FgHiGreen,
-	"yellow":    color.FgYellow,
-	"hiyellow":  color.FgHiYellow,
-	"blue":      color.FgBlue,
-	"hiblue":    color.FgHiBlue,
-	"magenta":   color.FgMagenta,
-	"himagenta": color.FgHiMagenta,
-	"cyan":      color.FgCyan,
-	"hicyan":    color.FgHiCyan,
-	"white":     color.FgWhite,
-	"hiwhite":   color.FgHiWhite,
+func colorWhite() {
+	ct.ChangeColor(ct.White, false, ct.None, false)
+}
+
+func colorGreen() {
+	ct.ChangeColor(ct.Green, false, ct.None, false)
+}
+
+func colorCyan() {
+	ct.ChangeColor(ct.Cyan, false, ct.None, false)
+}
+
+func colorYellow() {
+	ct.ChangeColor(ct.Yellow, false, ct.None, false)
+}
+
+/*
+walker gets all files in the filterDir and directories below
+You can:
+    filter files like "*.go"
+    give a max. directory depth
+        -1 = unrestricted deep
+        0 = only filterDir
+        1 =  filterDir and 1 deeper
+        etc.
+Example (unrestricted directories deep):
+files, err := Walker(rootDir, "*.go", -1)
+
+TODO: Move this to library
+*/
+func walker(filterDir, filter string, depth int) error {
+	orgSlashes := strings.Count(filterDir, "/") + 1 + depth
+	err := filepath.Walk(filterDir, func(path string, fileInfo os.FileInfo, walkError error) (err error) {
+		if walkError != nil {
+			return walkError
+		}
+
+		if fileInfo.IsDir() {
+			return nil
+		}
+
+		matched, err := filepath.Match(filter, fileInfo.Name())
+		if err == nil && matched {
+			path = strings.Replace(path, "\\", "/", -1) // for windows
+			if depth >= 0 {
+				slashes := strings.Count(path, "/")
+				if slashes > orgSlashes {
+					return nil
+				}
+			}
+			if !strings.Contains(path, "/vendor/") {
+
+				dir, _ := filepath.Abs(filepath.Dir(path))
+				file := strings.ReplaceAll(path, dir+"/", "")
+				testFiles[file] = path
+			}
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func findTestFiles() {
+	dir, err := filepath.Abs(filepath.Dir("."))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_ = walker(dir, "*_test.go", 10)
+}
+
+func printFullFile(file string) {
+	fileParts := strings.Split(file, ".go")
+	file = fileParts[0] + ".go"
+	print(testFiles[file])
 }
