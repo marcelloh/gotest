@@ -30,12 +30,14 @@ func main() {
 	findTestFiles()
 
 	exitCode := gotest(os.Args[1:])
+
 	colorWhite()
 	os.Exit(exitCode)
 }
 
 func gotest(args []string) int {
 	var wg sync.WaitGroup
+
 	wg.Add(1)
 	defer wg.Wait()
 
@@ -54,23 +56,29 @@ func gotest(args []string) int {
 		if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 			return ws.ExitStatus()
 		}
+
 		return 1
 	}
+
 	return 0
 }
 
 func consume(wg *sync.WaitGroup, r io.Reader) {
 	defer wg.Done()
+
 	reader := bufio.NewReader(r)
+
 	for {
 		l, _, err := reader.ReadLine()
 		if err == io.EOF {
 			return
 		}
+
 		if err != nil {
 			log.Print(err)
 			return
 		}
+
 		parse(string(l))
 	}
 }
@@ -87,15 +95,16 @@ func parse(line string) {
 
 	// success
 	case strings.HasPrefix(trimmed, "--- PASS"):
-		fallthrough
+		colorGreen()
 	case strings.HasPrefix(trimmed, "ok"):
-		fallthrough
+		colorGreen()
 	case strings.HasPrefix(trimmed, "PASS"):
 		colorGreen()
 
 	// failure
 	case strings.HasPrefix(trimmed, "--- FAIL"):
 		isNextFile = true
+
 		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
 		colorRed()
@@ -103,11 +112,12 @@ func parse(line string) {
 
 	if isFile {
 		isFile = false
-		colorYellow()
 
+		colorYellow()
 		printFullFile(trimmed)
-		file := strings.Split(trimmed, ": ")
 		colorRed()
+
+		file := strings.Split(trimmed, ": ")
 		line = " " + file[1]
 	}
 
@@ -140,17 +150,6 @@ func colorYellow() {
 
 /*
 walker gets all files in the filterDir and directories below
-You can:
-    filter files like "*.go"
-    give a max. directory depth
-        -1 = unrestricted deep
-        0 = only filterDir
-        1 =  filterDir and 1 deeper
-        etc.
-Example (unrestricted directories deep):
-files, err := Walker(rootDir, "*.go", -1)
-
-TODO: Move this to library
 */
 func walker(filterDir, filter string, depth int) error {
 	orgSlashes := strings.Count(filterDir, "/") + 1 + depth

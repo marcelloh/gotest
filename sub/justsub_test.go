@@ -5,7 +5,7 @@ import (
 )
 
 func TestFail(t *testing.T) {
-	t.Errorf("I fail")
+	t.Errorf("I fail in sub")
 }
 
 func TestPass(t *testing.T) {
