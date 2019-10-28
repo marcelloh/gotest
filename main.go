@@ -27,7 +27,7 @@ var (
 )
 
 func main() {
-	println("gotest v.1.01")
+	println("gotest v.1.02")
 	findTestFiles()
 
 	exitCode := gotest(os.Args[1:])
@@ -201,9 +201,10 @@ func printFullFile(file string) {
 	fileParts := strings.Split(file, ".go")
 
 	file = fileParts[0] + ".go"
-	if len(fileParts) > 1 {
-		file += fileParts[1]
-	}
 
 	print(testFiles[file] + "/" + file)
+
+	if len(fileParts) > 1 {
+		print(fileParts[1])
+	}
 }
