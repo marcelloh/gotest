@@ -27,12 +27,13 @@ var (
 )
 
 func main() {
-	println("gotest v.1.02")
+	ct.ResetColor()
+	println("gotest v.1.03")
 	findTestFiles()
 
 	exitCode := gotest(os.Args[1:])
 
-	colorWhite()
+	ct.ResetColor()
 	os.Exit(exitCode)
 }
 
@@ -199,7 +200,6 @@ func findTestFiles() {
 func printFullFile(file string) {
 	file = strings.TrimSpace(file)
 	fileParts := strings.Split(file, ".go")
-
 	file = fileParts[0] + ".go"
 
 	print(testFiles[file] + "/" + file)
