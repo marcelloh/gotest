@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	ct "github.com/daviddengcn/go-colortext"
 )
@@ -24,16 +25,22 @@ import (
 var (
 	isFile    bool
 	testFiles = map[string]string{}
+	startTime = time.Now().Local()
 )
 
 func main() {
 	ct.ResetColor()
-	println("gotest v.1.03")
+	println("gotest v.1.04")
 	findTestFiles()
 
 	exitCode := gotest(os.Args[1:])
 
 	ct.ResetColor()
+
+	busy := time.Since(startTime).String()
+
+	println("Busy:", busy)
+
 	os.Exit(exitCode)
 }
 
