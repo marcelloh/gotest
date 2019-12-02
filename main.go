@@ -20,28 +20,67 @@ import (
 	"time"
 
 	ct "github.com/daviddengcn/go-colortext"
+	"gopkg.in/fsnotify.v1"
 )
 
 var (
-	isFile    bool
-	testFiles = map[string]string{}
-	startTime = time.Now().Local()
+	isFile     bool
+	testFiles  = map[string]string{}
+	startTime  time.Time
+	watcher    = &fsnotify.Watcher{}
+	args       []string
+	totalFails int
 )
 
 func main() {
+	var exitCode int
+	watcher, _ = fsnotify.NewWatcher()
+
+	args = os.Args
+	lastArg := args[len(args)-1]
+	if lastArg == "loop" {
+		args = args[:len(args)-1]
+	}
+
+	endless := true
+	for endless {
+		exitCode = run()
+		if lastArg == "loop" {
+			totalFails = 0
+			stopLoop := monitorChanges()
+			if stopLoop {
+				endless = false
+			}
+		} else {
+			endless = false
+		}
+	}
+
+	watcher.Close()
+	os.Exit(exitCode)
+}
+
+func run() int {
+	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.04")
+	println("gotest v.1.05")
+
 	findTestFiles()
 
-	exitCode := gotest(os.Args[1:])
+	exitCode := gotest(args[1:])
 
 	ct.ResetColor()
 
 	busy := time.Since(startTime).String()
-
 	println("Busy:", busy)
 
-	os.Exit(exitCode)
+	if totalFails > 0 {
+		colorRed()
+		println("Totasl fails:", totalFails)
+		ct.ResetColor()
+	}
+
+	return exitCode
 }
 
 func gotest(args []string) int {
@@ -112,6 +151,7 @@ func parse(line string) {
 
 	// failure
 	case strings.HasPrefix(trimmed, "--- FAIL"):
+		totalFails++
 		isNextFile = true
 
 		colorRed()
@@ -132,6 +172,8 @@ func parse(line string) {
 	}
 
 	fmt.Printf("%s\n", line)
+
+	ct.ResetColor()
 
 	if isNextFile {
 		isFile = true
@@ -159,10 +201,25 @@ func colorYellow() {
 }
 
 /*
+findTestFiles finds all testfiles
+*/
+func findTestFiles() {
+
+	dir, err := filepath.Abs(filepath.Dir("."))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_ = walker(dir, "*_test.go", 10)
+}
+
+/*
 walker gets all files in the filterDir and directories below
 */
 func walker(filterDir, filter string, depth int) error {
 	orgSlashes := strings.Count(filterDir, "/") + 1 + depth
+	watchDirs := ""
+
 	err := filepath.Walk(filterDir, func(path string, fileInfo os.FileInfo, walkError error) (err error) {
 		if walkError != nil {
 			return walkError
@@ -181,11 +238,16 @@ func walker(filterDir, filter string, depth int) error {
 					return nil
 				}
 			}
-			if !strings.Contains(path, "/vendor/") {
 
+			if !strings.Contains(path, "/vendor/") {
 				dir, _ := filepath.Abs(filepath.Dir(path))
 				file := strings.ReplaceAll(path, dir+"/", "")
 				testFiles[file] = dir
+
+				if !strings.Contains(watchDirs, dir+",") {
+					watchDirs += dir + ","
+					_ = watcher.Add(dir)
+				}
 			}
 		}
 
@@ -195,13 +257,42 @@ func walker(filterDir, filter string, depth int) error {
 	return err
 }
 
-func findTestFiles() {
-	dir, err := filepath.Abs(filepath.Dir("."))
-	if err != nil {
-		log.Fatal(err)
-	}
+func monitorChanges() bool {
 
-	_ = walker(dir, "*_test.go", 10)
+	var wg sync.WaitGroup
+	stopLoop := false
+	endless := true
+
+	// quit := make(chan os.Signal, 1)
+	// signal.Notify(quit, os.Interrupt)
+	// wg.Add(1)
+	// go func() {
+	// 	println("1st")
+	// 	<-quit
+	// 	println("\nTest loop is stopping...")
+	// 	endless = false
+	// 	stopLoop = true
+	// 	defer wg.Done()
+	// }()
+
+	wg.Add(1)
+	go func() {
+		for endless {
+			select {
+			case event := <-watcher.Events:
+				if event.Op.String() == "WRITE" {
+					defer wg.Done()
+					endless = false
+				}
+
+			case err := <-watcher.Errors:
+				fmt.Print("ERROR: ", err)
+			}
+		}
+	}()
+	wg.Wait()
+
+	return stopLoop
 }
 
 func printFullFile(file string) {
