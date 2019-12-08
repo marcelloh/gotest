@@ -76,7 +76,7 @@ func run() int {
 
 	if totalFails > 0 {
 		colorRed()
-		println("Totasl fails:", totalFails)
+		println("Total fails:", totalFails)
 		ct.ResetColor()
 	}
 
