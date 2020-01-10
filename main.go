@@ -63,7 +63,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.05")
+	println("gotest v.1.06")
 
 	findTestFiles()
 
@@ -76,11 +76,30 @@ func run() int {
 
 	if totalFails > 0 {
 		colorRed()
-		println("Total fails:", totalFails)
+		print("Total fails: ", totalFails, " ")
 		ct.ResetColor()
+		sadSmiley()
+		println()
+	} else {
+		colorGreen()
+		print("No fails ")
+		happySmiley()
+		println()
 	}
 
 	return exitCode
+}
+
+func sadSmiley() {
+	colorMagenta()
+	print(":-(")
+	ct.ResetColor()
+}
+
+func happySmiley() {
+	colorMagenta()
+	print(":-)")
+	ct.ResetColor()
 }
 
 func gotest(args []string) int {
@@ -198,6 +217,10 @@ func colorCyan() {
 
 func colorYellow() {
 	ct.ChangeColor(ct.Yellow, false, ct.None, false)
+}
+
+func colorMagenta() {
+	ct.ChangeColor(ct.Magenta, false, ct.None, false)
 }
 
 /*
