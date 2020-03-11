@@ -79,7 +79,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.08")
+	println("gotest v.1.09")
 
 	findTestFiles()
 
@@ -201,12 +201,12 @@ func parse(line string) {
 		colorYellow()
 		var file []string
 		var fileName string
-		if verbose || !oldGo {
-			file = strings.Split(fileLine, ": ")
-			fileName = file[1]
-		} else {
+		if !verbose || oldGo {
 			file = strings.Split(line, ": ")
 			fileName = strings.TrimSpace(file[0])
+		} else {
+			file = strings.Split(fileLine, ": ")
+			fileName = file[1]
 		}
 
 		printFullFile(fileName)
