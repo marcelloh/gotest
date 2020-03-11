@@ -79,7 +79,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.09")
+	println("gotest v.1.10")
 
 	findTestFiles()
 
