@@ -20,7 +20,7 @@ import (
 	"time"
 
 	ct "github.com/daviddengcn/go-colortext"
-	"gopkg.in/fsnotify.v1"
+	"github.com/fsnotify/fsnotify"
 )
 
 var (
@@ -72,7 +72,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.07")
+	println("gotest v.1.08")
 
 	findTestFiles()
 
