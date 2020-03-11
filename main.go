@@ -30,6 +30,9 @@ var (
 	watcher    = &fsnotify.Watcher{}
 	args       []string
 	totalFails int
+	lastLine   string
+	fileLine   string
+	verbose    bool
 )
 
 func main() {
@@ -40,6 +43,12 @@ func main() {
 	lastArg := args[len(args)-1]
 	if lastArg == "loop" {
 		args = args[:len(args)-1]
+	}
+
+	for _, value := range args {
+		if value == "-v" {
+			verbose = true
+		}
 	}
 
 	endless := true
@@ -63,7 +72,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.06")
+	println("gotest v.1.07")
 
 	findTestFiles()
 
@@ -172,6 +181,7 @@ func parse(line string) {
 	case strings.HasPrefix(trimmed, "--- FAIL"):
 		totalFails++
 		isNextFile = true
+		fileLine = lastLine
 
 		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
@@ -182,15 +192,24 @@ func parse(line string) {
 		isFile = false
 
 		colorYellow()
+		var file []string
+		var fileName string
+		if verbose {
+			file = strings.Split(fileLine, ": ")
+			fileName = file[1]
+		} else {
+			file = strings.Split(line, ": ")
+			fileName = strings.TrimSpace(file[0])
+		}
 
-		file := strings.Split(line, ": ")
-		printFullFile(file[0])
+		printFullFile(fileName)
 		colorRed()
 
-		line = " " + file[1]
+		line = " "
 	}
 
 	fmt.Printf("%s\n", line)
+	lastLine = line
 
 	ct.ResetColor()
 
