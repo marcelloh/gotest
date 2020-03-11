@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,11 +34,17 @@ var (
 	lastLine   string
 	fileLine   string
 	verbose    bool
+	oldGo      bool
 )
 
 func main() {
 	var exitCode int
 	watcher, _ = fsnotify.NewWatcher()
+
+	goVersion := runtime.Version()
+	if strings.Compare(goVersion, "go1.14") < 0 {
+		oldGo = true
+	}
 
 	args = os.Args
 	lastArg := args[len(args)-1]
@@ -194,7 +201,7 @@ func parse(line string) {
 		colorYellow()
 		var file []string
 		var fileName string
-		if verbose {
+		if verbose || !oldGo {
 			file = strings.Split(fileLine, ": ")
 			fileName = file[1]
 		} else {
