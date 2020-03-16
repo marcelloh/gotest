@@ -25,22 +25,22 @@ import (
 )
 
 var (
-	isFile     bool
-	testFiles  = map[string]string{}
-	startTime  time.Time
-	watcher    = &fsnotify.Watcher{}
-	args       []string
-	totalFails int
-	lastLine   string
-	fileLine   string
-	verbose    bool
-	oldGo      bool
+	isFile      bool
+	testFiles   = map[string]string{}
+	startTime   time.Time
+	watcher     = &fsnotify.Watcher{}
+	args        []string
+	totalFails  int
+	lastLine    string
+	fileLine    string
+	verbose     bool
+	oldGo       bool
+	testRunning string
 )
 
 func main() {
 	var exitCode int
 	watcher, _ = fsnotify.NewWatcher()
-
 	goVersion := runtime.Version()
 	if strings.Compare(goVersion, "go1.14") < 0 {
 		oldGo = true
@@ -79,7 +79,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.10")
+	println("gotest v.1.11")
 
 	findTestFiles()
 
@@ -173,6 +173,7 @@ func parse(line string) {
 	switch {
 	case strings.HasPrefix(trimmed, "=== RUN"):
 		colorWhite()
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
 		colorCyan()
 
@@ -197,24 +198,17 @@ func parse(line string) {
 
 	if isFile {
 		isFile = false
-
-		colorYellow()
-		var file []string
-		var fileName string
 		if !verbose || oldGo {
-			file = strings.Split(line, ": ")
-			fileName = strings.TrimSpace(file[0])
-		} else {
-			file = strings.Split(fileLine, ": ")
-			fileName = file[1]
+			showFileLink(trimmed)
 		}
-
-		printFullFile(fileName)
-		colorRed()
-
-		line = " "
 	}
 
+	if strings.HasPrefix(trimmed, testRunning) {
+		fileLine = trimmed
+		if verbose && !oldGo {
+			showFileLink(trimmed)
+		}
+	}
 	fmt.Printf("%s\n", line)
 	lastLine = line
 
@@ -223,6 +217,31 @@ func parse(line string) {
 	if isNextFile {
 		isFile = true
 	}
+}
+
+func showFileLink(line string) {
+	colorYellow()
+	var file []string
+	var fileName string
+
+	file = strings.Split(line, ": ")
+	if !verbose || oldGo {
+		fileName = file[0]
+	} else {
+		fileName = file[1]
+	}
+
+	fileParts := strings.Split(fileName, ".go")
+	fileName = fileParts[0] + ".go"
+
+	print(testFiles[fileName] + "/" + fileName)
+
+	if len(fileParts) > 1 {
+		print(fileParts[1])
+	}
+	println()
+
+	colorRed()
 }
 
 func colorRed() {
