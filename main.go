@@ -79,7 +79,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.11")
+	println("gotest v.1.12")
 
 	findTestFiles()
 
@@ -203,7 +203,7 @@ func parse(line string) {
 		}
 	}
 
-	if strings.HasPrefix(trimmed, testRunning) {
+	if testRunning != "" && strings.HasPrefix(trimmed, testRunning) {
 		fileLine = trimmed
 		if verbose && !oldGo {
 			showFileLink(trimmed)
