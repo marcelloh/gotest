@@ -9,7 +9,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -26,12 +30,13 @@ import (
 
 var (
 	isFile      bool
-	testFiles   = map[string]string{}
+	testFuncs   = map[string]string{}
 	startTime   time.Time
 	watcher     = &fsnotify.Watcher{}
 	args        []string
 	totalFails  int
 	lastLine    string
+	lastFunc    string
 	fileLine    string
 	verbose     bool
 	oldGo       bool
@@ -79,7 +84,7 @@ func main() {
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.12")
+	println("gotest v.1.14")
 
 	findTestFiles()
 
@@ -186,11 +191,15 @@ func parse(line string) {
 		colorGreen()
 
 	// failure
-	case strings.HasPrefix(trimmed, "--- FAIL"):
+	case strings.Contains(trimmed, "--- FAIL"):
+		parts := strings.Split(trimmed, "--- FAIL")
+		trimmed = "--- FAIL" + parts[1]
+		line = trimmed
+
 		totalFails++
 		isNextFile = true
 		fileLine = lastLine
-
+		lastFunc = getFuncName(trimmed)
 		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
 		colorRed()
@@ -219,6 +228,12 @@ func parse(line string) {
 	}
 }
 
+func getFuncName(text string) string {
+	parts := strings.Split(text, " ")
+
+	return parts[2]
+}
+
 func showFileLink(line string) {
 	colorYellow()
 	var file []string
@@ -234,7 +249,7 @@ func showFileLink(line string) {
 	fileParts := strings.Split(fileName, ".go")
 	fileName = fileParts[0] + ".go"
 
-	print(testFiles[fileName] + "/" + fileName)
+	print(testFuncs[fileName+"_"+lastFunc] + "/" + fileName)
 
 	if len(fileParts) > 1 {
 		print(fileParts[1])
@@ -245,7 +260,7 @@ func showFileLink(line string) {
 }
 
 func colorRed() {
-	ct.ChangeColor(ct.Red, false, ct.None, false)
+	ct.ChangeColor(ct.Red, true, ct.None, false)
 }
 
 func colorWhite() {
@@ -310,7 +325,25 @@ func walker(filterDir, filter string, depth int) error {
 			if !strings.Contains(path, "/vendor/") {
 				dir, _ := filepath.Abs(filepath.Dir(path))
 				file := strings.ReplaceAll(path, dir+"/", "")
-				testFiles[file] = dir
+
+				memFile := ""
+				dataBytes, err := ioutil.ReadFile(path)
+				if err == nil {
+					memFile = string(dataBytes)
+				}
+
+				fileSet := token.NewFileSet()
+				node, err := parser.ParseFile(fileSet, "", memFile, parser.ParseComments)
+				if err != nil {
+					log.Fatal(err)
+				}
+				for _, f := range node.Decls {
+					funcDecl, ok := f.(*ast.FuncDecl)
+					if ok {
+						functionName := file + "_" + funcDecl.Name.Name
+						testFuncs[functionName] = dir
+					}
+				}
 
 				if !strings.Contains(watchDirs, dir+",") {
 					watchDirs += dir + ","
@@ -331,18 +364,6 @@ func monitorChanges() bool {
 	stopLoop := false
 	endless := true
 
-	// quit := make(chan os.Signal, 1)
-	// signal.Notify(quit, os.Interrupt)
-	// wg.Add(1)
-	// go func() {
-	// 	println("1st")
-	// 	<-quit
-	// 	println("\nTest loop is stopping...")
-	// 	endless = false
-	// 	stopLoop = true
-	// 	defer wg.Done()
-	// }()
-
 	wg.Add(1)
 	go func() {
 		for endless {
@@ -361,16 +382,4 @@ func monitorChanges() bool {
 	wg.Wait()
 
 	return stopLoop
-}
-
-func printFullFile(file string) {
-	file = strings.TrimSpace(file)
-	fileParts := strings.Split(file, ".go")
-	file = fileParts[0] + ".go"
-
-	print(testFiles[file] + "/" + file)
-
-	if len(fileParts) > 1 {
-		print(fileParts[1])
-	}
 }
