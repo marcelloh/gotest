@@ -6,6 +6,8 @@
 // and prints the output in color.
 package main
 
+/* ------------------------------- Imports --------------------------- */
+
 import (
 	"bufio"
 	"fmt"
@@ -28,6 +30,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+/* ---------------------- Constants/Types/Variables ------------------ */
+
 var (
 	isFile      bool
 	testFuncs   = map[string]string{}
@@ -43,6 +47,11 @@ var (
 	testRunning string
 )
 
+/* -------------------------- Methods/Functions ---------------------- */
+
+/*
+main is the bootstrap of the application
+*/
 func main() {
 	var exitCode int
 	watcher, _ = fsnotify.NewWatcher()
@@ -81,10 +90,13 @@ func main() {
 	os.Exit(exitCode)
 }
 
+/*
+run starts to test all files
+*/
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.14")
+	println("gotest v.1.15")
 
 	findTestFiles()
 
@@ -111,38 +123,47 @@ func run() int {
 	return exitCode
 }
 
+/*
+sadSmiley shows a bad status
+*/
 func sadSmiley() {
 	colorMagenta()
 	print(":-(")
 	ct.ResetColor()
 }
 
+/*
+happySmiley shows a good status
+*/
 func happySmiley() {
 	colorMagenta()
 	print(":-)")
 	ct.ResetColor()
 }
 
+/*
+gotest runs the necessary tests
+*/
 func gotest(args []string) int {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	defer wg.Wait()
 
-	r, w := io.Pipe()
-	defer w.Close()
+	read, write := io.Pipe()
+	defer write.Close()
 
 	args = append([]string{"test"}, args...)
 	cmd := exec.Command("go", args...)
-	cmd.Stderr = w
-	cmd.Stdout = w
+	cmd.Stderr = write
+	cmd.Stdout = write
 	cmd.Env = os.Environ()
 
-	go consume(&wg, r)
+	go consume(&wg, read)
 
 	if err := cmd.Run(); err != nil {
-		if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
-			return ws.ExitStatus()
+		if wstatus, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+			return wstatus.ExitStatus()
 		}
 
 		return 1
@@ -151,13 +172,16 @@ func gotest(args []string) int {
 	return 0
 }
 
+/*
+consume gets the output from the tests
+*/
 func consume(wg *sync.WaitGroup, r io.Reader) {
 	defer wg.Done()
 
 	reader := bufio.NewReader(r)
 
 	for {
-		l, _, err := reader.ReadLine()
+		line, _, err := reader.ReadLine()
 		if err == io.EOF {
 			return
 		}
@@ -167,10 +191,13 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 			return
 		}
 
-		parse(string(l))
+		parse(string(line))
 	}
 }
 
+/*
+parse haldes the output line by line
+*/
 func parse(line string) {
 	trimmed := strings.TrimSpace(line)
 	isNextFile := false
@@ -181,7 +208,6 @@ func parse(line string) {
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
 		colorCyan()
-
 	// success
 	case strings.HasPrefix(trimmed, "--- PASS"):
 		colorGreen()
@@ -189,13 +215,11 @@ func parse(line string) {
 		colorGreen()
 	case strings.HasPrefix(trimmed, "PASS"):
 		colorGreen()
-
 	// failure
 	case strings.Contains(trimmed, "--- FAIL"):
 		parts := strings.Split(trimmed, "--- FAIL")
 		trimmed = "--- FAIL" + parts[1]
 		line = trimmed
-
 		totalFails++
 		isNextFile = true
 		fileLine = lastLine
@@ -218,9 +242,9 @@ func parse(line string) {
 			showFileLink(trimmed)
 		}
 	}
+
 	fmt.Printf("%s\n", line)
 	lastLine = line
-
 	ct.ResetColor()
 
 	if isNextFile {
@@ -228,12 +252,18 @@ func parse(line string) {
 	}
 }
 
+/*
+getFuncName returns the current function name
+*/
 func getFuncName(text string) string {
 	parts := strings.Split(text, " ")
 
 	return parts[2]
 }
 
+/*
+showFileLink shows a link to the current file
+*/
 func showFileLink(line string) {
 	colorYellow()
 	var file []string
@@ -259,26 +289,44 @@ func showFileLink(line string) {
 	colorRed()
 }
 
+/*
+colorRed changes to output color to red
+*/
 func colorRed() {
 	ct.ChangeColor(ct.Red, true, ct.None, false)
 }
 
+/*
+colorWhite changes to output color to white
+*/
 func colorWhite() {
 	ct.ChangeColor(ct.White, false, ct.None, false)
 }
 
+/*
+colorGreen changes to output color to green
+*/
 func colorGreen() {
 	ct.ChangeColor(ct.Green, false, ct.None, false)
 }
 
+/*
+colorCyan changes to output color to cyan
+*/
 func colorCyan() {
 	ct.ChangeColor(ct.Cyan, false, ct.None, false)
 }
 
+/*
+colorYellow changes to output color to yellow
+*/
 func colorYellow() {
 	ct.ChangeColor(ct.Yellow, false, ct.None, false)
 }
 
+/*
+colorMagenta changes to output color to magenta
+*/
 func colorMagenta() {
 	ct.ChangeColor(ct.Magenta, false, ct.None, false)
 }
@@ -358,6 +406,9 @@ func walker(filterDir, filter string, depth int) error {
 	return err
 }
 
+/*
+monitorChanges monitors if a change happens
+*/
 func monitorChanges() bool {
 
 	var wg sync.WaitGroup
