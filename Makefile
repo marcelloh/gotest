@@ -1,4 +1,4 @@
-# define standard colors
+# define standard colorsing
 SHELL=/bin/bash
 
 BLACK        := $(shell tput -Txterm setaf 0)
