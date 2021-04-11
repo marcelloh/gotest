@@ -204,7 +204,7 @@ func parse(line string) {
 
 	switch {
 	case strings.HasPrefix(trimmed, "=== RUN"):
-		colorWhite()
+		colorYellow()
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
 		colorCyan()
@@ -335,7 +335,6 @@ func colorMagenta() {
 findTestFiles finds all testfiles
 */
 func findTestFiles() {
-
 	dir, err := filepath.Abs(filepath.Dir("."))
 	if err != nil {
 		log.Fatal(err)
