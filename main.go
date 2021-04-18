@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -53,8 +54,7 @@ var (
 main is the bootstrap of the application
 */
 func main() {
-	var exitCode int
-	watcher, _ = fsnotify.NewWatcher()
+	// var exitCode int
 	goVersion := runtime.Version()
 	if strings.Compare(goVersion, "go1.14") < 0 {
 		oldGo = true
@@ -72,22 +72,7 @@ func main() {
 		}
 	}
 
-	endless := true
-	for endless {
-		exitCode = run()
-		if lastArg == "loop" {
-			totalFails = 0
-			stopLoop := monitorChanges()
-			if stopLoop {
-				endless = false
-			}
-		} else {
-			endless = false
-		}
-	}
-
-	watcher.Close()
-	os.Exit(exitCode)
+	os.Exit(run())
 }
 
 /*
@@ -96,7 +81,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.15")
+	println("gotest v.1.16")
 
 	findTestFiles()
 
@@ -146,29 +131,49 @@ gotest runs the necessary tests
 */
 func gotest(args []string) int {
 	var wg sync.WaitGroup
-
 	wg.Add(1)
 	defer wg.Wait()
 
-	read, write := io.Pipe()
-	defer write.Close()
+	r, w := io.Pipe()
+	defer w.Close()
 
 	args = append([]string{"test"}, args...)
 	cmd := exec.Command("go", args...)
-	cmd.Stderr = write
-	cmd.Stdout = write
+	cmd.Stderr = w
+	cmd.Stdout = w
 	cmd.Env = os.Environ()
 
-	go consume(&wg, read)
-
-	if err := cmd.Run(); err != nil {
-		if wstatus, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
-			return wstatus.ExitStatus()
-		}
-
+	if err := cmd.Start(); err != nil {
+		log.Print(err)
 		return 1
 	}
 
+	go consume(&wg, r)
+
+	sigc := make(chan os.Signal)
+	done := make(chan struct{})
+	defer func() {
+		done <- struct{}{}
+	}()
+	signal.Notify(sigc)
+
+	go func() {
+		for {
+			select {
+			case sig := <-sigc:
+				cmd.Process.Signal(sig)
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	if err := cmd.Wait(); err != nil {
+		if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+			return ws.ExitStatus()
+		}
+		return 1
+	}
 	return 0
 }
 
@@ -224,6 +229,12 @@ func parse(line string) {
 		isNextFile = true
 		fileLine = lastLine
 		lastFunc = getFuncName(trimmed)
+		colorRed()
+	case strings.Contains(trimmed, "[build failed]"):
+		totalFails++
+		colorRed()
+	case strings.HasPrefix(trimmed, "# "):
+		totalFails++
 		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
 		colorRed()
@@ -348,7 +359,7 @@ walker gets all files in the filterDir and directories below
 */
 func walker(filterDir, filter string, depth int) error {
 	orgSlashes := strings.Count(filterDir, "/") + 1 + depth
-	watchDirs := ""
+	// watchDirs := ""
 
 	err := filepath.Walk(filterDir, func(path string, fileInfo os.FileInfo, walkError error) (err error) {
 		if walkError != nil {
@@ -391,11 +402,6 @@ func walker(filterDir, filter string, depth int) error {
 						testFuncs[functionName] = dir
 					}
 				}
-
-				if !strings.Contains(watchDirs, dir+",") {
-					watchDirs += dir + ","
-					_ = watcher.Add(dir)
-				}
 			}
 		}
 
@@ -403,33 +409,4 @@ func walker(filterDir, filter string, depth int) error {
 	})
 
 	return err
-}
-
-/*
-monitorChanges monitors if a change happens
-*/
-func monitorChanges() bool {
-
-	var wg sync.WaitGroup
-	stopLoop := false
-	endless := true
-
-	wg.Add(1)
-	go func() {
-		for endless {
-			select {
-			case event := <-watcher.Events:
-				if event.Op.String() == "WRITE" {
-					defer wg.Done()
-					endless = false
-				}
-
-			case err := <-watcher.Errors:
-				fmt.Print("ERROR: ", err)
-			}
-		}
-	}()
-	wg.Wait()
-
-	return stopLoop
 }
