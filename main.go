@@ -81,7 +81,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.16")
+	println("gotest v.1.17")
 
 	findTestFiles()
 
@@ -225,11 +225,14 @@ func parse(line string) {
 		parts := strings.Split(trimmed, "--- FAIL")
 		trimmed = "--- FAIL" + parts[1]
 		line = trimmed
-		totalFails++
+		if !strings.Contains(line, "/") {
+			totalFails++ // only count the main test that failed
+		}
+		colorRed()
 		isNextFile = true
 		fileLine = lastLine
 		lastFunc = getFuncName(trimmed)
-		colorRed()
+		//colorRed()
 	case strings.Contains(trimmed, "[build failed]"):
 		totalFails++
 		colorRed()
@@ -276,7 +279,6 @@ func getFuncName(text string) string {
 showFileLink shows a link to the current file
 */
 func showFileLink(line string) {
-	colorYellow()
 	var file []string
 	var fileName string
 
@@ -287,9 +289,14 @@ func showFileLink(line string) {
 		fileName = file[1]
 	}
 
+	if fileName == "--- FAIL" {
+		return
+	}
+
 	fileParts := strings.Split(fileName, ".go")
 	fileName = fileParts[0] + ".go"
 
+	colorYellow()
 	print(testFuncs[fileName+"_"+lastFunc] + "/" + fileName)
 
 	if len(fileParts) > 1 {
