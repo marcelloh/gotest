@@ -34,18 +34,20 @@ import (
 /* ---------------------- Constants/Types/Variables ------------------ */
 
 var (
-	isFile      bool
-	testFuncs   = map[string]string{}
-	startTime   time.Time
-	watcher     = &fsnotify.Watcher{}
-	args        []string
-	totalFails  int
-	lastLine    string
-	lastFunc    string
-	fileLine    string
-	verbose     bool
-	oldGo       bool
-	testRunning string
+	isFile       bool
+	testFuncs    = map[string]string{}
+	startTime    time.Time
+	watcher      = &fsnotify.Watcher{}
+	args         []string
+	totalSkips   int
+	totalFails   int
+	totalNoTests int
+	lastLine     string
+	lastFunc     string
+	fileLine     string
+	verbose      bool
+	oldGo        bool
+	testRunning  string
 )
 
 /* -------------------------- Methods/Functions ---------------------- */
@@ -81,7 +83,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.17")
+	println("gotest v.1.18")
 
 	findTestFiles()
 
@@ -103,6 +105,25 @@ func run() int {
 		print("No fails ")
 		happySmiley()
 		println()
+	}
+
+	if totalSkips > 0 {
+		colorBlue()
+		print("Total skips: ")
+		colorRed()
+		print(totalSkips, " ")
+		ct.ResetColor()
+		println()
+	}
+
+	if totalNoTests > 0 {
+		colorCyan()
+		print("Total packages without tests: ")
+		colorRed()
+		print(totalNoTests, " ")
+		ct.ResetColor()
+		println()
+
 	}
 
 	return exitCode
@@ -211,7 +232,18 @@ func parse(line string) {
 	case strings.HasPrefix(trimmed, "=== RUN"):
 		colorYellow()
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
+	case strings.HasPrefix(trimmed, "=== PAUSE"):
+		colorYellow()
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== PAUSE", "")) + ": "
+	case strings.HasPrefix(trimmed, "=== CONT"):
+		colorYellow()
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
+	case strings.HasPrefix(trimmed, "--- SKIP"):
+		totalSkips++
+		colorBlue()
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
+		totalNoTests++
 		colorCyan()
 	// success
 	case strings.HasPrefix(trimmed, "--- PASS"):
@@ -308,6 +340,34 @@ func showFileLink(line string) {
 }
 
 /*
+colorBlue changes to output color to blue
+*/
+func colorBlue() {
+	ct.ChangeColor(ct.Blue, false, ct.None, false)
+}
+
+/*
+colorCyan changes to output color to cyan
+*/
+func colorCyan() {
+	ct.ChangeColor(ct.Cyan, false, ct.None, false)
+}
+
+/*
+colorGreen changes to output color to green
+*/
+func colorGreen() {
+	ct.ChangeColor(ct.Green, false, ct.None, false)
+}
+
+/*
+colorMagenta changes to output color to magenta
+*/
+func colorMagenta() {
+	ct.ChangeColor(ct.Magenta, false, ct.None, false)
+}
+
+/*
 colorRed changes to output color to red
 */
 func colorRed() {
@@ -322,31 +382,10 @@ func colorWhite() {
 }
 
 /*
-colorGreen changes to output color to green
-*/
-func colorGreen() {
-	ct.ChangeColor(ct.Green, false, ct.None, false)
-}
-
-/*
-colorCyan changes to output color to cyan
-*/
-func colorCyan() {
-	ct.ChangeColor(ct.Cyan, false, ct.None, false)
-}
-
-/*
 colorYellow changes to output color to yellow
 */
 func colorYellow() {
 	ct.ChangeColor(ct.Yellow, false, ct.None, false)
-}
-
-/*
-colorMagenta changes to output color to magenta
-*/
-func colorMagenta() {
-	ct.ChangeColor(ct.Magenta, false, ct.None, false)
 }
 
 /*
