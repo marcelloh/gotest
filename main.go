@@ -83,7 +83,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 	ct.ResetColor()
-	println("gotest v.1.18")
+	println("gotest v.1.19")
 
 	findTestFiles()
 

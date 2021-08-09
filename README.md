@@ -20,7 +20,7 @@ $ go get -u github.com/marcelloh/gotest
 or get a specific version, like this:
 
 ```
-$ go get -u github.com/marcelloh/gotest@v1.0.10
+$ go get -u github.com/marcelloh/gotest@v1.0.19
 ```
 
 ## Usage
