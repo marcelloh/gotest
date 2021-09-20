@@ -14,13 +14,17 @@ it will show:
 ## Installation
 
 ```
+$ go install github.com/marcelloh/gotest@latest
+or
 $ go get -u github.com/marcelloh/gotest
+
 ```
 
 or get a specific version, like this:
 
 ```
-$ go get -u github.com/marcelloh/gotest@v1.0.19
+$ go install github.com/marcelloh/gotest@v1.19.1
+$ go get -u github.com/marcelloh/gotest@v1.19.0
 ```
 
 ## Usage
