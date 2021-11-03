@@ -11,3 +11,7 @@ func TestFail(t *testing.T) {
 func TestPass(t *testing.T) {
 	// I pass
 }
+
+func TestPass2(t *testing.T) {
+	demo = ""
+}

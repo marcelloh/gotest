@@ -28,26 +28,29 @@ import (
 	"time"
 
 	ct "github.com/daviddengcn/go-colortext"
-	"github.com/fsnotify/fsnotify"
 )
 
 /* ---------------------- Constants/Types/Variables ------------------ */
 
 var (
-	isFile       bool
-	testFuncs    = map[string]string{}
-	startTime    time.Time
-	watcher      = &fsnotify.Watcher{}
+	isFile    bool
+	testFuncs = map[string]string{}
+	startTime time.Time
+	//watcher      = &fsnotify.Watcher{}
 	args         []string
 	totalSkips   int
 	totalFails   int
 	totalNoTests int
 	lastLine     string
 	lastFunc     string
-	fileLine     string
+	fileLine     string //nolint: gocritic,unused
 	verbose      bool
 	oldGo        bool
 	testRunning  string
+
+	// used for filterWalker
+	filter            string
+	depth, orgSlashes int
 )
 
 /* -------------------------- Methods/Functions ---------------------- */
@@ -64,6 +67,7 @@ func main() {
 
 	args = os.Args
 	lastArg := args[len(args)-1]
+
 	if lastArg == "loop" {
 		args = args[:len(args)-1]
 	}
@@ -82,8 +86,9 @@ run starts to test all files
 */
 func run() int {
 	startTime = time.Now().Local()
+
 	ct.ResetColor()
-	println("gotest v1.19.2")
+	println("gotest v1.19.3")
 
 	findTestFiles()
 
@@ -123,7 +128,6 @@ func run() int {
 		print(totalNoTests, " ")
 		ct.ResetColor()
 		println()
-
 	}
 
 	return exitCode
@@ -152,6 +156,7 @@ gotest runs the necessary tests
 */
 func gotest(args []string) int {
 	var wg sync.WaitGroup
+
 	wg.Add(1)
 	defer wg.Wait()
 
@@ -166,23 +171,26 @@ func gotest(args []string) int {
 
 	if err := cmd.Start(); err != nil {
 		log.Print(err)
+
 		return 1
 	}
 
 	go consume(&wg, r)
 
-	sigc := make(chan os.Signal)
+	sigc := make(chan os.Signal, 1)
 	done := make(chan struct{})
+
 	defer func() {
 		done <- struct{}{}
 	}()
-	signal.Notify(sigc)
+
+	signal.Notify(sigc, os.Interrupt)
 
 	go func() {
 		for {
 			select {
 			case sig := <-sigc:
-				cmd.Process.Signal(sig)
+				_ = cmd.Process.Signal(sig)
 			case <-done:
 				return
 			}
@@ -193,8 +201,10 @@ func gotest(args []string) int {
 		if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 			return ws.ExitStatus()
 		}
+
 		return 1
 	}
+
 	return 0
 }
 
@@ -214,6 +224,7 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 
 		if err != nil {
 			log.Print(err)
+
 			return
 		}
 
@@ -228,48 +239,39 @@ func parse(line string) {
 	trimmed := strings.TrimSpace(line)
 	isNextFile := false
 
+	checkYellow(trimmed)
+	// success
+	checkGreen(trimmed)
+
 	switch {
-	case strings.HasPrefix(trimmed, "=== RUN"):
-		colorYellow()
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
-	case strings.HasPrefix(trimmed, "=== PAUSE"):
-		colorYellow()
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== PAUSE", "")) + ": "
-	case strings.HasPrefix(trimmed, "=== CONT"):
-		colorYellow()
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
 	case strings.HasPrefix(trimmed, "--- SKIP"):
-		totalSkips++
 		colorBlue()
+		totalSkips++
+
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
-		totalNoTests++
 		colorCyan()
-	// success
-	case strings.HasPrefix(trimmed, "--- PASS"):
-		colorGreen()
-	case strings.HasPrefix(trimmed, "ok"):
-		colorGreen()
-	case strings.HasPrefix(trimmed, "PASS"):
-		colorGreen()
+		totalNoTests++
 	// failure
 	case strings.Contains(trimmed, "--- FAIL"):
+		colorRed()
+
 		parts := strings.Split(trimmed, "--- FAIL")
 		trimmed = "--- FAIL" + parts[1]
 		line = trimmed
+
 		if !strings.Contains(line, "/") {
 			totalFails++ // only count the main test that failed
 		}
-		colorRed()
+
 		isNextFile = true
 		fileLine = lastLine
 		lastFunc = getFuncName(trimmed)
-		//colorRed()
 	case strings.Contains(trimmed, "[build failed]"):
-		totalFails++
 		colorRed()
-	case strings.HasPrefix(trimmed, "# "):
+
 		totalFails++
+	case strings.HasPrefix(trimmed, "# "):
 		colorRed()
 	case strings.HasPrefix(trimmed, "FAIL"):
 		colorRed()
@@ -277,24 +279,48 @@ func parse(line string) {
 
 	if isFile {
 		isFile = false
-		if !verbose || oldGo {
-			showFileLink(trimmed)
-		}
+
+		showFileLink(trimmed)
 	}
 
 	if testRunning != "" && strings.HasPrefix(trimmed, testRunning) {
 		fileLine = trimmed
-		if verbose && !oldGo {
-			showFileLink(trimmed)
-		}
+		showFileLink(trimmed)
 	}
 
 	fmt.Printf("%s\n", line)
 	lastLine = line
+
 	ct.ResetColor()
 
 	if isNextFile {
 		isFile = true
+	}
+}
+
+func checkYellow(trimmed string) {
+	switch {
+	case strings.HasPrefix(trimmed, "=== RUN"):
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
+	case strings.HasPrefix(trimmed, "=== PAUSE"):
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== PAUSE", "")) + ": "
+	case strings.HasPrefix(trimmed, "=== CONT"):
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
+	}
+
+	if testRunning != "" {
+		colorYellow()
+	}
+}
+
+func checkGreen(trimmed string) {
+	switch {
+	case strings.HasPrefix(trimmed, "--- PASS"):
+		colorGreen()
+	case strings.HasPrefix(trimmed, "ok"):
+		colorGreen()
+	case strings.HasPrefix(trimmed, "PASS"):
+		colorGreen()
 	}
 }
 
@@ -311,8 +337,14 @@ func getFuncName(text string) string {
 showFileLink shows a link to the current file
 */
 func showFileLink(line string) {
-	var file []string
-	var fileName string
+	if verbose && !oldGo {
+		return
+	}
+
+	var (
+		file     []string
+		fileName string
+	)
 
 	file = strings.Split(line, ": ")
 	if !verbose || oldGo {
@@ -334,6 +366,7 @@ func showFileLink(line string) {
 	if len(fileParts) > 1 {
 		print(fileParts[1])
 	}
+
 	println()
 
 	colorRed()
@@ -375,13 +408,6 @@ func colorRed() {
 }
 
 /*
-colorWhite changes to output color to white
-*/
-func colorWhite() {
-	ct.ChangeColor(ct.White, false, ct.None, false)
-}
-
-/*
 colorYellow changes to output color to yellow
 */
 func colorYellow() {
@@ -397,62 +423,79 @@ func findTestFiles() {
 		log.Fatal(err)
 	}
 
-	_ = walker(dir, "*_test.go", 10)
+	_ = walker(dir, "*_test.go")
 }
 
 /*
 walker gets all files in the filterDir and directories below
 */
-func walker(filterDir, filter string, depth int) error {
-	orgSlashes := strings.Count(filterDir, "/") + 1 + depth
+func walker(filterDir, locFilter string) error {
+	filter = locFilter
+	depth = 10
+	orgSlashes = strings.Count(filterDir, "/") + 1 + depth
 	// watchDirs := ""
 
-	err := filepath.Walk(filterDir, func(path string, fileInfo os.FileInfo, walkError error) (err error) {
-		if walkError != nil {
-			return walkError
-		}
-
-		if fileInfo.IsDir() {
-			return nil
-		}
-
-		matched, err := filepath.Match(filter, fileInfo.Name())
-		if err == nil && matched {
-			path = strings.Replace(path, "\\", "/", -1) // for windows
-			if depth >= 0 {
-				slashes := strings.Count(path, "/")
-				if slashes > orgSlashes {
-					return nil
-				}
-			}
-
-			if !strings.Contains(path, "/vendor/") {
-				dir, _ := filepath.Abs(filepath.Dir(path))
-				file := strings.ReplaceAll(path, dir+"/", "")
-
-				memFile := ""
-				dataBytes, err := ioutil.ReadFile(path)
-				if err == nil {
-					memFile = string(dataBytes)
-				}
-
-				fileSet := token.NewFileSet()
-				node, err := parser.ParseFile(fileSet, "", memFile, parser.ParseComments)
-				if err != nil {
-					log.Fatal(err)
-				}
-				for _, f := range node.Decls {
-					funcDecl, ok := f.(*ast.FuncDecl)
-					if ok {
-						functionName := file + "_" + funcDecl.Name.Name
-						testFuncs[functionName] = dir
-					}
-				}
-			}
-		}
-
-		return nil
-	})
+	err := filepath.Walk(filterDir, filepath.WalkFunc(walkerFilter))
 
 	return err
+}
+
+/*
+walkerFilter filtyers all files ojn only the wanted ones
+*/
+func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error) {
+	if walkError != nil {
+		return walkError
+	}
+
+	if fileInfo.IsDir() {
+		return nil
+	}
+
+	matched, err := filepath.Match(filter, fileInfo.Name())
+	if err != nil || !matched {
+		return nil //nolint: gocritic,nilerr
+	}
+
+	path = strings.Replace(path, "\\", "/", -1) // for windows
+	if depth >= 0 {
+		slashes := strings.Count(path, "/")
+		if slashes > orgSlashes {
+			return nil
+		}
+	}
+
+	if strings.Contains(path, "/vendor/") {
+		return nil
+	}
+
+	addTestFuncs(path)
+
+	return nil
+}
+
+func addTestFuncs(path string) {
+	dir, _ := filepath.Abs(filepath.Dir(path))
+	file := strings.ReplaceAll(path, dir+"/", "")
+	memFile := ""
+
+	dataBytes, err := ioutil.ReadFile(path)
+	if err == nil {
+		memFile = string(dataBytes)
+	}
+
+	fileSet := token.NewFileSet()
+
+	node, err := parser.ParseFile(fileSet, "", memFile, parser.ParseComments)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, f := range node.Decls {
+		funcDecl, ok := f.(*ast.FuncDecl)
+		if ok {
+			functionName := file + "_" + funcDecl.Name.Name
+			testFuncs[functionName] = dir
+		}
+	}
 }

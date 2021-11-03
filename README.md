@@ -23,7 +23,7 @@ $ go get -u github.com/marcelloh/gotest
 or get a specific version, like this:
 
 ```
-$ go install github.com/marcelloh/gotest@v1.19.2
+$ go install github.com/marcelloh/gotest@v1.19.3
 $ go get -u github.com/marcelloh/gotest@v1.19.0
 ```
 
@@ -35,14 +35,4 @@ Example:
 
 ```
 $ gotest -v ./...
-```
-## Extra
-
-If "loop" is the last argument, it will keep running and watch file changes.
-(not for new files!)
-
-Example:
-
-```
-$ gotest ./... loop
 ```
