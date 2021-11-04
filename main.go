@@ -88,7 +88,7 @@ func run() int {
 	startTime = time.Now().Local()
 
 	ct.ResetColor()
-	println("gotest v1.19.3")
+	println("gotest v1.19.4")
 
 	findTestFiles()
 
@@ -299,6 +299,7 @@ func parse(line string) {
 }
 
 func checkYellow(trimmed string) {
+	testRunning = ""
 	switch {
 	case strings.HasPrefix(trimmed, "=== RUN"):
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "

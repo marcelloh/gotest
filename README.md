@@ -23,7 +23,7 @@ $ go get -u github.com/marcelloh/gotest
 or get a specific version, like this:
 
 ```
-$ go install github.com/marcelloh/gotest@v1.19.3
+$ go install github.com/marcelloh/gotest@v1.19.4
 $ go get -u github.com/marcelloh/gotest@v1.19.0
 ```
 
