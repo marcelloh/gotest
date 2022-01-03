@@ -36,3 +36,7 @@ Example:
 ```
 $ gotest -v ./...
 ```
+
+## Screenshot
+
+![screenshot](screenshot.png)
