@@ -33,17 +33,16 @@ import (
 /* ---------------------- Constants/Types/Variables ------------------ */
 
 var (
-	isFile    bool
-	testFuncs = map[string]string{}
-	startTime time.Time
-	//watcher      = &fsnotify.Watcher{}
+	isFile       bool
+	testFuncs    = map[string]string{}
+	startTime    time.Time
 	args         []string
 	totalSkips   int
 	totalFails   int
 	totalNoTests int
 	lastLine     string
 	lastFunc     string
-	fileLine     string //nolint: gocritic,unused
+	fileLine     string //nolint: unused
 	verbose      bool
 	oldGo        bool
 	testRunning  string
@@ -88,7 +87,7 @@ func run() int {
 	startTime = time.Now().Local()
 
 	ct.ResetColor()
-	println("gotest v1.19.4")
+	println("gotest v1.19.5")
 
 	findTestFiles()
 
@@ -268,11 +267,9 @@ func parse(line string) {
 		fileLine = lastLine
 		lastFunc = getFuncName(trimmed)
 	case strings.Contains(trimmed, "[build failed]"):
-		colorRed()
-
-		totalFails++
+		addFail()
 	case strings.HasPrefix(trimmed, "# "):
-		colorRed()
+		addFail()
 	case strings.HasPrefix(trimmed, "FAIL"):
 		colorRed()
 	}
@@ -298,8 +295,15 @@ func parse(line string) {
 	}
 }
 
+func addFail() {
+	colorRed()
+
+	totalFails++
+}
+
 func checkYellow(trimmed string) {
 	testRunning = ""
+
 	switch {
 	case strings.HasPrefix(trimmed, "=== RUN"):
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
@@ -455,10 +459,10 @@ func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error
 
 	matched, err := filepath.Match(filter, fileInfo.Name())
 	if err != nil || !matched {
-		return nil //nolint: gocritic,nilerr
+		return nil //nolint: nilerr
 	}
 
-	path = strings.Replace(path, "\\", "/", -1) // for windows
+	path = strings.ReplaceAll(path, "\\", "/") // for windows
 	if depth >= 0 {
 		slashes := strings.Count(path, "/")
 		if slashes > orgSlashes {
