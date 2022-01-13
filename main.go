@@ -50,6 +50,7 @@ var (
 	// used for filterWalker
 	filter            string
 	depth, orgSlashes int
+	rootDir           string
 )
 
 /* -------------------------- Methods/Functions ---------------------- */
@@ -77,6 +78,8 @@ func main() {
 		}
 	}
 
+	rootDir, _ = os.Getwd()
+
 	os.Exit(run())
 }
 
@@ -87,7 +90,7 @@ func run() int {
 	startTime = time.Now().Local()
 
 	ct.ResetColor()
-	println("gotest v1.19.5")
+	println("gotest v1.19.6")
 
 	findTestFiles()
 
@@ -365,8 +368,17 @@ func showFileLink(line string) {
 	fileParts := strings.Split(fileName, ".go")
 	fileName = fileParts[0] + ".go"
 
+	find := fileName + "_" + lastFunc
+	split := strings.Split(find, "/.")
+	find = split[0]
+
+	dir := testFuncs[find]
+	dir, _ = filepath.Abs(filepath.Dir(dir))
+	dir = strings.ReplaceAll(dir, rootDir, "")
+	dir = strings.ReplaceAll(dir, "\\", "/") // for windows
+
 	colorYellow()
-	print(testFuncs[fileName+"_"+lastFunc] + "/" + fileName)
+	print("." + dir + "/" + fileName)
 
 	if len(fileParts) > 1 {
 		print(fileParts[1])
@@ -482,6 +494,7 @@ func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error
 func addTestFuncs(path string) {
 	dir, _ := filepath.Abs(filepath.Dir(path))
 	file := strings.ReplaceAll(path, dir+"/", "")
+
 	memFile := ""
 
 	dataBytes, err := ioutil.ReadFile(path)
@@ -499,8 +512,12 @@ func addTestFuncs(path string) {
 	for _, f := range node.Decls {
 		funcDecl, ok := f.(*ast.FuncDecl)
 		if ok {
+			//functionName := file + "_" + funcDecl.Name.Name
+			//testFuncs[functionName] = dir
 			functionName := file + "_" + funcDecl.Name.Name
-			testFuncs[functionName] = dir
+			// log.Println(`main.go:527 functionName:`, functionName)
+
+			testFuncs[functionName] = path
 		}
 	}
 }
