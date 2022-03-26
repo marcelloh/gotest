@@ -19,3 +19,4 @@ dist/gotest_d*
 dist/gotest_l*
 dist/gotest_w*
 dist/config*
+gotest

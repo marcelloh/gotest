@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	ct "github.com/daviddengcn/go-colortext"
+	"github.com/iskaa02/qalam"
 )
 
 /* ---------------------- Constants/Types/Variables ------------------ */
@@ -59,6 +59,8 @@ var (
 main is the bootstrap of the application
 */
 func main() {
+	// https: // github.com/iskaa02/qalam
+
 	// var exitCode int
 	goVersion := runtime.Version()
 	if strings.Compare(goVersion, "go1.14") < 0 {
@@ -89,46 +91,34 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 
-	ct.ResetColor()
-	println("gotest v1.19.6")
-
+	qalam.Printf("[white]%s[/white]", "gotest v1.19.7")
+	println()
 	findTestFiles()
 
 	exitCode := gotest(args[1:])
-
-	ct.ResetColor()
 
 	busy := time.Since(startTime).String()
 	println("Busy:", busy)
 
 	if totalFails > 0 {
-		colorRed()
-		print("Total fails: ", totalFails, " ")
-		ct.ResetColor()
+		qalam.Printf("[red]%s %d [/red]", "Total fails:", totalFails)
 		sadSmiley()
 		println()
 	} else {
-		colorGreen()
-		print("No fails ")
+		qalam.Printf("[green]%s[/green]", "No fails")
 		happySmiley()
 		println()
 	}
 
 	if totalSkips > 0 {
-		colorBlue()
-		print("Total skips: ")
-		colorRed()
-		print(totalSkips, " ")
-		ct.ResetColor()
+		qalam.Printf("[blue]%s [/blue]", "Total skips:")
+		qalam.Printf("[red]%d [/red]", totalSkips)
 		println()
 	}
 
 	if totalNoTests > 0 {
-		colorCyan()
-		print("Total packages without tests: ")
-		colorRed()
-		print(totalNoTests, " ")
-		ct.ResetColor()
+		qalam.Printf("[cyan]%s [/cyan]", "Total packages without tests:")
+		qalam.Printf("[red]%d[/red]", totalNoTests)
 		println()
 	}
 
@@ -139,18 +129,14 @@ func run() int {
 sadSmiley shows a bad status
 */
 func sadSmiley() {
-	colorMagenta()
-	print(":-(")
-	ct.ResetColor()
+	qalam.Printf(" [:thumbs_down:]")
 }
 
 /*
 happySmiley shows a good status
 */
 func happySmiley() {
-	colorMagenta()
-	print(":-)")
-	ct.ResetColor()
+	qalam.Printf(" [:thumbs_up:]")
 }
 
 /*
@@ -238,26 +224,30 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 parse haldes the output line by line
 */
 func parse(line string) {
+	color := ""
 	trimmed := strings.TrimSpace(line)
 	isNextFile := false
 
-	checkYellow(trimmed)
+	if checkYellow(trimmed) {
+		color = "yellow"
+	}
 	// success
-	checkGreen(trimmed)
+	if checkGreen(trimmed) {
+		color = "green"
+	}
 
 	switch {
 	case strings.HasPrefix(trimmed, "--- SKIP"):
-		colorBlue()
+		color = "blue"
 		totalSkips++
 
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
 	case strings.HasPrefix(trimmed, "?"):
-		colorCyan()
+		color = "cyan"
 		totalNoTests++
 	// failure
 	case strings.Contains(trimmed, "--- FAIL"):
-		colorRed()
-
+		color = "red"
 		parts := strings.Split(trimmed, "--- FAIL")
 		trimmed = "--- FAIL" + parts[1]
 		line = trimmed
@@ -270,11 +260,13 @@ func parse(line string) {
 		fileLine = lastLine
 		lastFunc = getFuncName(trimmed)
 	case strings.Contains(trimmed, "[build failed]"):
-		addFail()
+		color = "red"
+		totalFails++
 	case strings.HasPrefix(trimmed, "# "):
-		addFail()
+		color = "red"
+		totalFails++
 	case strings.HasPrefix(trimmed, "FAIL"):
-		colorRed()
+		color = "red"
 	}
 
 	if isFile {
@@ -288,23 +280,20 @@ func parse(line string) {
 		showFileLink(trimmed)
 	}
 
-	fmt.Printf("%s\n", line)
-	lastLine = line
+	if color == "" {
+		fmt.Printf("%s\n", line)
+	} else {
+		qalam.Printf("[%s]%s\n[/%s]", color, line, color)
+	}
 
-	ct.ResetColor()
+	lastLine = line
 
 	if isNextFile {
 		isFile = true
 	}
 }
 
-func addFail() {
-	colorRed()
-
-	totalFails++
-}
-
-func checkYellow(trimmed string) {
+func checkYellow(trimmed string) bool {
 	testRunning = ""
 
 	switch {
@@ -316,20 +305,22 @@ func checkYellow(trimmed string) {
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
 	}
 
-	if testRunning != "" {
-		colorYellow()
-	}
+	return testRunning != ""
 }
 
-func checkGreen(trimmed string) {
+func checkGreen(trimmed string) bool {
+	ret := false
+
 	switch {
 	case strings.HasPrefix(trimmed, "--- PASS"):
-		colorGreen()
+		ret = true
 	case strings.HasPrefix(trimmed, "ok"):
-		colorGreen()
+		ret = true
 	case strings.HasPrefix(trimmed, "PASS"):
-		colorGreen()
+		ret = true
 	}
+
+	return ret
 }
 
 /*
@@ -377,58 +368,17 @@ func showFileLink(line string) {
 	dir = strings.ReplaceAll(dir, rootDir, "")
 	dir = strings.ReplaceAll(dir, "\\", "/") // for windows
 
-	colorYellow()
+	qalam.Printf("[yellow]")
 	print("." + dir + "/" + fileName)
 
 	if len(fileParts) > 1 {
 		print(fileParts[1])
 	}
 
+	qalam.Printf("[/yellow]")
 	println()
 
-	colorRed()
-}
-
-/*
-colorBlue changes to output color to blue
-*/
-func colorBlue() {
-	ct.ChangeColor(ct.Blue, false, ct.None, false)
-}
-
-/*
-colorCyan changes to output color to cyan
-*/
-func colorCyan() {
-	ct.ChangeColor(ct.Cyan, false, ct.None, false)
-}
-
-/*
-colorGreen changes to output color to green
-*/
-func colorGreen() {
-	ct.ChangeColor(ct.Green, false, ct.None, false)
-}
-
-/*
-colorMagenta changes to output color to magenta
-*/
-func colorMagenta() {
-	ct.ChangeColor(ct.Magenta, false, ct.None, false)
-}
-
-/*
-colorRed changes to output color to red
-*/
-func colorRed() {
-	ct.ChangeColor(ct.Red, true, ct.None, false)
-}
-
-/*
-colorYellow changes to output color to yellow
-*/
-func colorYellow() {
-	ct.ChangeColor(ct.Yellow, false, ct.None, false)
+	// colorRed()
 }
 
 /*
@@ -512,8 +462,8 @@ func addTestFuncs(path string) {
 	for _, f := range node.Decls {
 		funcDecl, ok := f.(*ast.FuncDecl)
 		if ok {
-			//functionName := file + "_" + funcDecl.Name.Name
-			//testFuncs[functionName] = dir
+			// functionName := file + "_" + funcDecl.Name.Name
+			// testFuncs[functionName] = dir
 			functionName := file + "_" + funcDecl.Name.Name
 			// log.Println(`main.go:527 functionName:`, functionName)
 
