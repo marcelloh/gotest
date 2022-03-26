@@ -91,7 +91,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 
-	qalam.Printf("[white]%s[/white]", "gotest v1.19.8")
+	qalam.Printf("[white]%s[/white]", "gotest v1.19.9")
 	println()
 	findTestFiles()
 
@@ -371,7 +371,7 @@ func showFileLink(line string) {
 	text := fmt.Sprintf(".%s/%s", dir, fileName)
 
 	if len(fileParts) > 1 {
-		text = fmt.Sprintf("%s %s", text, fileParts[1])
+		text = fmt.Sprintf("%s%s", text, fileParts[1])
 	}
 
 	qalam.Printf("[yellow]%s[/yellow]", text)
