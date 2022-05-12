@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iskaa02/qalam"
+	"github.com/iskaa02/qalam/bbcode"
 )
 
 /* ---------------------- Constants/Types/Variables ------------------ */
@@ -91,7 +91,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 
-	qalam.Printf("[white]%s[/white]", "gotest v1.19.9")
+	bbcode.Printf("[white]%s[/white]", "gotest v1.19.11")
 	println()
 	findTestFiles()
 
@@ -101,24 +101,24 @@ func run() int {
 	println("Busy:", busy)
 
 	if totalFails > 0 {
-		qalam.Printf("[red]%s %d [/red]", "Total fails:", totalFails)
+		bbcode.Printf("[red]%s %d [/red]", "Total fails:", totalFails)
 		sadSmiley()
 		println()
 	} else {
-		qalam.Printf("[green]%s[/green]", "No fails")
+		bbcode.Printf("[green]%s[/green]", "No fails")
 		happySmiley()
 		println()
 	}
 
 	if totalSkips > 0 {
-		qalam.Printf("[blue]%s [/blue]", "Total skips:")
-		qalam.Printf("[red]%d [/red]", totalSkips)
+		bbcode.Printf("[blue]%s [/blue]", "Total skips:")
+		bbcode.Printf("[red]%d [/red]", totalSkips)
 		println()
 	}
 
 	if totalNoTests > 0 {
-		qalam.Printf("[cyan]%s [/cyan]", "Total packages without tests:")
-		qalam.Printf("[red]%d[/red]", totalNoTests)
+		bbcode.Printf("[cyan]%s [/cyan]", "Total packages without tests:")
+		bbcode.Printf("[red]%d[/red]", totalNoTests)
 		println()
 	}
 
@@ -129,14 +129,14 @@ func run() int {
 sadSmiley shows a bad status
 */
 func sadSmiley() {
-	qalam.Printf(" [:thumbs_down:]")
+	bbcode.Printf(" [:thumbs_down:]")
 }
 
 /*
 happySmiley shows a good status
 */
 func happySmiley() {
-	qalam.Printf(" [:thumbs_up:]")
+	bbcode.Printf(" [:thumbs_up:]")
 }
 
 /*
@@ -283,7 +283,7 @@ func parse(line string) {
 	if color == "" {
 		fmt.Printf("%s\n", line)
 	} else {
-		qalam.Printf("[%s]%s\n[/%s]", color, line, color)
+		bbcode.Printf("[%s]%s\n[/%s]", color, line, color)
 	}
 
 	lastLine = line
@@ -374,7 +374,13 @@ func showFileLink(line string) {
 		text = fmt.Sprintf("%s%s", text, fileParts[1])
 	}
 
-	qalam.Printf("[yellow]%s[/yellow]", text)
+	if text[len(text)-1:] == ":" {
+		text += "1:"
+	}
+	// text = strings.TrimSuffix(text, ":")
+	text = strings.TrimPrefix(text, "./")
+
+	bbcode.Printf("[yellow]%s[/yellow]\n", text)
 	println()
 
 	// colorRed()
