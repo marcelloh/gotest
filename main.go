@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/enescakir/emoji"
 	"github.com/iskaa02/qalam/bbcode"
 )
 
@@ -91,7 +92,7 @@ run starts to test all files
 func run() int {
 	startTime = time.Now().Local()
 
-	bbcode.Printf("[white]%s[/white]", "gotest v1.19.11")
+	bbcode.Printf("[white]%s[/white]", "gotest v1.19.12")
 	println()
 	findTestFiles()
 
@@ -129,14 +130,14 @@ func run() int {
 sadSmiley shows a bad status
 */
 func sadSmiley() {
-	bbcode.Printf(" [:thumbs_down:]")
+	fmt.Printf(" %v", emoji.ThumbsDown)
 }
 
 /*
 happySmiley shows a good status
 */
 func happySmiley() {
-	bbcode.Printf(" [:thumbs_up:]")
+	fmt.Printf(" %v", emoji.ThumbsUp)
 }
 
 /*
