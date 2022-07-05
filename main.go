@@ -222,7 +222,7 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 }
 
 /*
-parse haldes the output line by line
+parse handles the output line by line
 */
 func parse(line string) {
 	color := ""
