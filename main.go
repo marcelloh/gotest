@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // gotest is a tiny program that shells out to `go test`
-// and prints the output in color.
+// and prints the output in colour.
 package main
 
 /* ------------------------------- Imports --------------------------- */
@@ -15,7 +15,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -33,6 +32,8 @@ import (
 
 /* ---------------------- Constants/Types/Variables ------------------ */
 
+const errColour = "red"
+
 var (
 	isFile       bool
 	testFuncs    = map[string]string{}
@@ -43,12 +44,12 @@ var (
 	totalNoTests int
 	lastLine     string
 	lastFunc     string
-	fileLine     string //nolint: unused
+	fileLine     string //nolint:unused // false positive
 	verbose      bool
 	oldGo        bool
 	testRunning  string
 
-	// used for filterWalker
+	// used for filterWalker.
 	filter            string
 	depth, orgSlashes int
 	rootDir           string
@@ -57,14 +58,11 @@ var (
 /* -------------------------- Methods/Functions ---------------------- */
 
 /*
-main is the bootstrap of the application
+main is the bootstrap of the application.
 */
 func main() {
-	// https: // github.com/iskaa02/qalam
-
-	// var exitCode int
 	goVersion := runtime.Version()
-	if strings.Compare(goVersion, "go1.14") < 0 {
+	if goVersion < "go1.14" {
 		oldGo = true
 	}
 
@@ -87,12 +85,12 @@ func main() {
 }
 
 /*
-run starts to test all files
+run starts to test all files.
 */
 func run() int {
 	startTime = time.Now().Local()
 
-	bbcode.Printf("[white]%s[/white]", "gotest v1.19.12")
+	bbcode.Printf("[white]%s[/white]", "gotest v1.19.13")
 	println()
 	findTestFiles()
 
@@ -127,44 +125,42 @@ func run() int {
 }
 
 /*
-sadSmiley shows a bad status
+sadSmiley shows a bad status.
 */
 func sadSmiley() {
 	fmt.Printf(" %v", emoji.ThumbsDown)
 }
 
 /*
-happySmiley shows a good status
+happySmiley shows a good status.
 */
 func happySmiley() {
 	fmt.Printf(" %v", emoji.ThumbsUp)
 }
 
 /*
-gotest runs the necessary tests
+gotest runs the necessary tests.
 */
 func gotest(args []string) int {
-	var wg sync.WaitGroup
+	var waitgroup sync.WaitGroup
 
-	wg.Add(1)
-	defer wg.Wait()
+	waitgroup.Add(1)
+	defer waitgroup.Wait()
 
-	r, w := io.Pipe()
-	defer w.Close()
+	reader, writer := io.Pipe()
+	defer func() {
+		_ = writer.Close()
+	}()
 
-	args = append([]string{"test"}, args...)
-	cmd := exec.Command("go", args...)
-	cmd.Stderr = w
-	cmd.Stdout = w
-	cmd.Env = os.Environ()
-
-	if err := cmd.Start(); err != nil {
+	cmd, err := runCLI(args, writer)
+	if err != nil {
 		log.Print(err)
+		waitgroup.Done()
 
 		return 1
 	}
 
-	go consume(&wg, r)
+	go consume(&waitgroup, reader)
 
 	sigc := make(chan os.Signal, 1)
 	done := make(chan struct{})
@@ -197,11 +193,26 @@ func gotest(args []string) int {
 	return 0
 }
 
+func runCLI(args []string, writer *io.PipeWriter) (*exec.Cmd, error) {
+	args = append([]string{"test"}, args...)
+	cmd := exec.Command("go", args...)
+	cmd.Stderr = writer
+	cmd.Stdout = writer
+	cmd.Env = os.Environ()
+
+	err := cmd.Start()
+	if err != nil {
+		err = fmt.Errorf("runCLI %w", err)
+	}
+
+	return cmd, err
+}
+
 /*
-consume gets the output from the tests
+consume gets the output from the tests.
 */
-func consume(wg *sync.WaitGroup, r io.Reader) {
-	defer wg.Done()
+func consume(waitgroup *sync.WaitGroup, r io.Reader) {
+	defer waitgroup.Done()
 
 	reader := bufio.NewReader(r)
 
@@ -222,53 +233,19 @@ func consume(wg *sync.WaitGroup, r io.Reader) {
 }
 
 /*
-parse handles the output line by line
+parse handles the output line by line.
 */
 func parse(line string) {
-	color := ""
+	colour := ""
 	trimmed := strings.TrimSpace(line)
 	isNextFile := false
 
-	if checkYellow(trimmed) {
-		color = "yellow"
-	}
-	// success
-	if checkGreen(trimmed) {
-		color = "green"
-	}
-
-	switch {
-	case strings.HasPrefix(trimmed, "--- SKIP"):
-		color = "blue"
-		totalSkips++
-
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
-	case strings.HasPrefix(trimmed, "?"):
-		color = "cyan"
-		totalNoTests++
-	// failure
-	case strings.Contains(trimmed, "--- FAIL"):
-		color = "red"
-		parts := strings.Split(trimmed, "--- FAIL")
-		trimmed = "--- FAIL" + parts[1]
-		line = trimmed
-
-		if !strings.Contains(line, "/") {
-			totalFails++ // only count the main test that failed
-		}
-
-		isNextFile = true
-		fileLine = lastLine
-		lastFunc = getFuncName(trimmed)
-	case strings.Contains(trimmed, "[build failed]"):
-		color = "red"
-		totalFails++
-	case strings.HasPrefix(trimmed, "# "):
-		color = "red"
-		totalFails++
-	case strings.HasPrefix(trimmed, "FAIL"):
-		color = "red"
-	}
+	colour = statusYellow(colour, trimmed)
+	colour = statusGreen(colour, trimmed) // success
+	colour = statusSkip(colour, trimmed)
+	colour = statusUnknown(colour, trimmed)
+	colour = statusAddFail(colour, trimmed)
+	colour, trimmed, line, isNextFile = statusFail(colour, trimmed, line, isNextFile)
 
 	if isFile {
 		isFile = false
@@ -281,10 +258,10 @@ func parse(line string) {
 		showFileLink(trimmed)
 	}
 
-	if color == "" {
+	if colour == "" {
 		fmt.Printf("%s\n", line)
 	} else {
-		bbcode.Printf("[%s]%s\n[/%s]", color, line, color)
+		bbcode.Printf("[%s]%s\n[/%s]", colour, line, colour)
 	}
 
 	lastLine = line
@@ -294,7 +271,68 @@ func parse(line string) {
 	}
 }
 
-func checkYellow(trimmed string) bool {
+func statusAddFail(colour, trimmed string) string {
+	testRunning = ""
+
+	switch {
+	case strings.Contains(trimmed, "[build failed]"):
+		colour = errColour
+		totalFails++
+	case strings.HasPrefix(trimmed, "# "):
+		colour = errColour
+		totalFails++
+	}
+
+	return colour
+}
+
+func statusFail(colour, trimmedIn, lineIn string, isNextFileIn bool) (errColour, trimmed, line string, isNextFile bool) {
+	if strings.HasPrefix(trimmed, "FAIL") {
+		colour = errColour
+	}
+
+	if !strings.Contains(trimmedIn, "--- FAIL") {
+		return colour, trimmedIn, lineIn, isNextFileIn
+	}
+
+	parts := strings.Split(trimmedIn, "--- FAIL")
+	trimmed = "--- FAIL" + parts[1]
+	line = trimmed
+
+	if !strings.Contains(line, "/") {
+		totalFails++
+	}
+
+	isNextFile = true
+	fileLine = lastLine
+	lastFunc = getFuncName(trimmed)
+
+	return errColour, trimmed, line, isNextFile
+}
+
+func statusUnknown(colour, trimmed string) string {
+	if strings.HasPrefix(trimmed, "?") {
+		colour = "cyan"
+		totalNoTests++
+	}
+
+	return colour
+}
+
+func statusSkip(colour, trimmed string) string {
+	testRunning = ""
+
+	if strings.HasPrefix(trimmed, "--- SKIP") {
+		colour = "blue"
+		totalSkips++
+
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
+	}
+
+	return colour
+}
+
+func statusYellow(colour, trimmed string) string {
 	testRunning = ""
 
 	switch {
@@ -306,10 +344,14 @@ func checkYellow(trimmed string) bool {
 		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
 	}
 
-	return testRunning != ""
+	if testRunning != "" {
+		colour = "yellow"
+	}
+
+	return colour
 }
 
-func checkGreen(trimmed string) bool {
+func statusGreen(colour, trimmed string) string {
 	ret := false
 
 	switch {
@@ -321,11 +363,15 @@ func checkGreen(trimmed string) bool {
 		ret = true
 	}
 
-	return ret
+	if ret {
+		colour = "green"
+	}
+
+	return colour
 }
 
 /*
-getFuncName returns the current function name
+getFuncName returns the current function name.
 */
 func getFuncName(text string) string {
 	parts := strings.Split(text, " ")
@@ -334,7 +380,7 @@ func getFuncName(text string) string {
 }
 
 /*
-showFileLink shows a link to the current file
+showFileLink shows a link to the current file.
 */
 func showFileLink(line string) {
 	if verbose && !oldGo {
@@ -378,17 +424,15 @@ func showFileLink(line string) {
 	if text[len(text)-1:] == ":" {
 		text += "1:"
 	}
-	// text = strings.TrimSuffix(text, ":")
+
 	text = strings.TrimPrefix(text, "./")
 
 	bbcode.Printf("[yellow]%s[/yellow]\n", text)
 	println()
-
-	// colorRed()
 }
 
 /*
-findTestFiles finds all testfiles
+findTestFiles finds all testfiles.
 */
 func findTestFiles() {
 	dir, err := filepath.Abs(filepath.Dir("."))
@@ -400,21 +444,19 @@ func findTestFiles() {
 }
 
 /*
-walker gets all files in the filterDir and directories below
+walker gets all files in the filterDir and directories below.
 */
 func walker(filterDir, locFilter string) error {
 	filter = locFilter
 	depth = 10
 	orgSlashes = strings.Count(filterDir, "/") + 1 + depth
-	// watchDirs := ""
-
 	err := filepath.Walk(filterDir, filepath.WalkFunc(walkerFilter))
 
-	return err
+	return fmt.Errorf("walker %w", err)
 }
 
 /*
-walkerFilter filtyers all files ojn only the wanted ones
+walkerFilter filtyers all files ojn only the wanted ones.
 */
 func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error) {
 	if walkError != nil {
@@ -427,7 +469,7 @@ func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error
 
 	matched, err := filepath.Match(filter, fileInfo.Name())
 	if err != nil || !matched {
-		return nil //nolint: nilerr
+		return nil //nolint:nilerr // everything is okay
 	}
 
 	path = strings.ReplaceAll(path, "\\", "/") // for windows
@@ -453,7 +495,7 @@ func addTestFuncs(path string) {
 
 	memFile := ""
 
-	dataBytes, err := ioutil.ReadFile(path)
+	dataBytes, err := os.ReadFile(filepath.Clean(path))
 	if err == nil {
 		memFile = string(dataBytes)
 	}
@@ -468,11 +510,7 @@ func addTestFuncs(path string) {
 	for _, f := range node.Decls {
 		funcDecl, ok := f.(*ast.FuncDecl)
 		if ok {
-			// functionName := file + "_" + funcDecl.Name.Name
-			// testFuncs[functionName] = dir
 			functionName := file + "_" + funcDecl.Name.Name
-			// log.Println(`main.go:527 functionName:`, functionName)
-
 			testFuncs[functionName] = path
 		}
 	}

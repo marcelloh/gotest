@@ -4,7 +4,7 @@ EXTRABUILD=Y
 MIGRATE=
 EXECUTABLE=gotest
 SPECIALSTART=Y
-include ~/data/go-private/Makefile_standard.mk
+include ../Makefile_standard.mk
 
 # extra build step below
 extra_build:

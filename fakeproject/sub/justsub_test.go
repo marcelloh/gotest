@@ -1,4 +1,4 @@
-package sub
+package sub_test
 
 import (
 	"testing"

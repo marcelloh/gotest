@@ -13,5 +13,5 @@ func TestPass(t *testing.T) {
 }
 
 func TestPass2(t *testing.T) {
-	demo = ""
+	demo = "" //nolint:typecheck // this is a test for a non declared variable
 }
