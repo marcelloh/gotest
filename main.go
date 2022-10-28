@@ -79,20 +79,35 @@ func main() {
 		}
 	}
 
+	cd := ""
+	if strings.Contains(args[1], "-cd ") {
+		parts := strings.Split(args[1], "-cd ")
+		cd = parts[1]
+		err := os.Chdir(cd)
+		if err != nil {
+			log.Print(err)
+		}
+
+		copy(args[1:], args[2:]) // Shift a[i+1:] left one index.
+		args[len(args)-1] = ""   // Erase last element (write zero value).
+		args = args[:len(args)-1]
+		println("CD to ", cd)
+	}
+
 	rootDir, _ = os.Getwd()
 
-	os.Exit(run())
+	os.Exit(run(lastArg))
 }
 
 /*
 run starts to test all files.
 */
-func run() int {
+func run(lastArg string) int {
 	startTime = time.Now().Local()
 
-	bbcode.Printf("[white]%s[/white]", "gotest v1.19.13")
+	bbcode.Printf("[white]%s[/white]", "gotest v1.19.14")
 	println()
-	findTestFiles()
+	findTestFiles(lastArg)
 
 	exitCode := gotest(args[1:])
 
@@ -286,8 +301,9 @@ func statusAddFail(colour, trimmed string) string {
 	return colour
 }
 
-func statusFail(colour, trimmedIn, lineIn string, isNextFileIn bool) (errColour, trimmed, line string, isNextFile bool) {
-	if strings.HasPrefix(trimmed, "FAIL") {
+func statusFail(colourIn, trimmedIn, lineIn string, isNextFileIn bool) (colour, trimmed, line string, isNextFile bool) {
+	colour = colourIn
+	if strings.HasPrefix(trimmedIn, "FAIL") {
 		colour = errColour
 	}
 
@@ -306,8 +322,9 @@ func statusFail(colour, trimmedIn, lineIn string, isNextFileIn bool) (errColour,
 	isNextFile = true
 	fileLine = lastLine
 	lastFunc = getFuncName(trimmed)
+	colour = errColour
 
-	return errColour, trimmed, line, isNextFile
+	return colour, trimmed, line, isNextFile
 }
 
 func statusUnknown(colour, trimmed string) string {
@@ -434,8 +451,8 @@ func showFileLink(line string) {
 /*
 findTestFiles finds all testfiles.
 */
-func findTestFiles() {
-	dir, err := filepath.Abs(filepath.Dir("."))
+func findTestFiles(lastArg string) {
+	dir, err := filepath.Abs(filepath.Dir(lastArg))
 	if err != nil {
 		log.Fatal(err)
 	}
