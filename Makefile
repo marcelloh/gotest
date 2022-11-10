@@ -4,7 +4,7 @@ EXTRABUILD=Y
 MIGRATE=
 EXECUTABLE=gotest
 SPECIALSTART=Y
-include ../Makefile_standard.mk
+include ../../Makefile_standard.mk
 
 # extra build step below
 extra_build:
