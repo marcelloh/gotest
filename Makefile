@@ -19,7 +19,7 @@ extra_build:
 	@echo
 	@echo "$(WHITE)> Copy to standard bin folder$(RESET)"
 	@cp ${EXECUTABLE} ~/go/bin/${EXECUTABLE}
-	@goreleaser release --snapshot --rm-dist
+	@goreleaser release --snapshot --clean
 
 # special start step below (demo)
 special_start:

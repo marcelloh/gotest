@@ -1,1 +1,1 @@
-{"project_name":"gotest","tag":"v1.19.13","previous_tag":"v1.19.12","version":"v1.19.14","commit":"bf6b292ae95f36888f5a706bf879301166088d54","date":"2022-10-28T10:38:08.113808+02:00","runtime":{"goos":"darwin","goarch":"arm64"}}
+{"project_name":"gotest","tag":"v1.19.22","previous_tag":"v1.19.14","version":"1.19.22-SNAPSHOT-5c1c66f","commit":"5c1c66f9601ef97e3a375217a1232f92c0042245","date":"2024-10-03T10:24:49.705436+02:00","runtime":{"goos":"darwin","goarch":"arm64"}}

@@ -1,6 +1,6 @@
 module github.com/marcelloh/gotest
 
-go 1.19
+go 1.23
 
 require (
 	github.com/enescakir/emoji v1.0.0

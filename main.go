@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// gotest is a tiny program that shells out to `go test`
+// Gotest is a tiny program that shells out to `go test`
 // and prints the output in colour.
 package main
 
@@ -32,10 +32,15 @@ import (
 
 /* ---------------------- Constants/Types/Variables ------------------ */
 
-const errColour = "red"
+const (
+	errColour = "red"
+	colonSep  = ": "
+)
 
 var (
 	isFile       bool
+	skipDirs     = map[string]bool{}
+	testDirs     = map[string]bool{}
 	testFuncs    = map[string]string{}
 	startTime    time.Time
 	args         []string
@@ -48,11 +53,13 @@ var (
 	verbose      bool
 	oldGo        bool
 	testRunning  string
+	firstLine    string
 
-	// used for filterWalker.
-	filter            string
-	depth, orgSlashes int
-	rootDir           string
+	// Used for filterWalker.
+	filter     string
+	rootDir    string
+	module     string
+	moduleRoot string
 )
 
 /* -------------------------- Methods/Functions ---------------------- */
@@ -79,11 +86,21 @@ func main() {
 		}
 	}
 
-	cd := ""
+	bbcode.Printf("[white]%s[/white]", "gotest v1.19.22")
+	println()
+
+	if len(args) < 2 {
+		bbcode.Printf("[red]%s[/red]", "no argument was given")
+		println()
+		os.Exit(0)
+	}
+
+	// only works when running in debug mode
 	if strings.Contains(args[1], "-cd ") {
 		parts := strings.Split(args[1], "-cd ")
-		cd = parts[1]
-		err := os.Chdir(cd)
+		changeDir := parts[1]
+
+		err := os.Chdir(changeDir)
 		if err != nil {
 			log.Print(err)
 		}
@@ -91,10 +108,13 @@ func main() {
 		copy(args[1:], args[2:]) // Shift a[i+1:] left one index.
 		args[len(args)-1] = ""   // Erase last element (write zero value).
 		args = args[:len(args)-1]
-		println("CD to ", cd)
+
+		println("CD to ", changeDir)
 	}
 
 	rootDir, _ = os.Getwd()
+
+	getModuleRoot(rootDir)
 
 	os.Exit(run(lastArg))
 }
@@ -105,8 +125,6 @@ run starts to test all files.
 func run(lastArg string) int {
 	startTime = time.Now().Local()
 
-	bbcode.Printf("[white]%s[/white]", "gotest v1.19.14")
-	println()
 	findTestFiles(lastArg)
 
 	exitCode := gotest(args[1:])
@@ -137,6 +155,21 @@ func run(lastArg string) int {
 	}
 
 	return exitCode
+}
+
+func getModuleRoot(dirpath string) {
+	fileName := dirpath + "/go.mod"
+	goFile := ""
+
+	dataBytes, err := os.ReadFile(filepath.Clean(fileName))
+	if err == nil {
+		goFile = string(dataBytes)
+	}
+
+	lines := strings.Split(goFile, "\n")
+	module = strings.ReplaceAll(lines[0], "module ", "")
+	moduleRoot = filepath.Dir(module)
+	module = strings.ReplaceAll(module, moduleRoot+"/", "")
 }
 
 /*
@@ -234,33 +267,64 @@ func consume(waitgroup *sync.WaitGroup, r io.Reader) {
 	for {
 		line, _, err := reader.ReadLine()
 		if err == io.EOF {
-			return
+			break
 		}
 
 		if err != nil {
 			log.Print(err)
 
-			return
+			break
 		}
 
-		parse(string(line))
+		consumeLine(string(line))
+		// break
 	}
+}
+
+func consumeLine(lineText string) {
+	parts := strings.Split(lineText, "\t")
+
+	if firstLine == "" && len(parts) > 1 {
+		firstLine = parts[1]
+	}
+
+	if len(parts) == 3 {
+		checkDir := strings.ReplaceAll(parts[1], firstLine, "")
+		if checkDir != "" && checkDir[0:1] == "/" {
+			if _, found := testDirs[checkDir]; !found {
+				return
+			}
+		}
+	}
+
+	parse(lineText)
 }
 
 /*
 parse handles the output line by line.
 */
 func parse(line string) {
+	line = strings.ReplaceAll(line, moduleRoot, "")
+
 	colour := ""
 	trimmed := strings.TrimSpace(line)
 	isNextFile := false
 
-	colour = statusYellow(colour, trimmed)
-	colour = statusGreen(colour, trimmed) // success
-	colour = statusSkip(colour, trimmed)
+	colour = statusYellowGreenSkip(colour, trimmed)
 	colour = statusUnknown(colour, trimmed)
 	colour = statusAddFail(colour, trimmed)
 	colour, trimmed, line, isNextFile = statusFail(colour, trimmed, line, isNextFile)
+
+	// see if we can skip the mentioning of this
+	if strings.Contains(line, "[no test files]") {
+		superTrim := strings.Split(line, "\t")[1]
+		if _, found := skipDirs[superTrim]; found {
+			colour = "green"
+			line = strings.ReplaceAll(line, "[no test files]", "[nothing to test]")
+		} else {
+			totalNoTests++
+		}
+	}
 
 	if isFile {
 		isFile = false
@@ -315,10 +379,6 @@ func statusFail(colourIn, trimmedIn, lineIn string, isNextFileIn bool) (colour, 
 	trimmed = "--- FAIL" + parts[1]
 	line = trimmed
 
-	if !strings.Contains(line, "/") {
-		totalFails++
-	}
-
 	isNextFile = true
 	fileLine = lastLine
 	lastFunc = getFuncName(trimmed)
@@ -330,57 +390,33 @@ func statusFail(colourIn, trimmedIn, lineIn string, isNextFileIn bool) (colour, 
 func statusUnknown(colour, trimmed string) string {
 	if strings.HasPrefix(trimmed, "?") {
 		colour = "cyan"
-		totalNoTests++
 	}
 
 	return colour
 }
 
-func statusSkip(colour, trimmed string) string {
+func statusYellowGreenSkip(colour, trimmed string) string {
 	testRunning = ""
 
-	if strings.HasPrefix(trimmed, "--- SKIP") {
+	switch {
+	case strings.HasPrefix(trimmed, "--- SKIP"):
 		colour = "blue"
 		totalSkips++
-
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + ": "
-	}
-
-	return colour
-}
-
-func statusYellow(colour, trimmed string) string {
-	testRunning = ""
-
-	switch {
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "--- SKIP", "")) + colonSep
 	case strings.HasPrefix(trimmed, "=== RUN"):
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + ": "
-	case strings.HasPrefix(trimmed, "=== PAUSE"):
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== PAUSE", "")) + ": "
-	case strings.HasPrefix(trimmed, "=== CONT"):
-		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + ": "
-	}
-
-	if testRunning != "" {
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== RUN", "")) + colonSep
 		colour = "yellow"
-	}
-
-	return colour
-}
-
-func statusGreen(colour, trimmed string) string {
-	ret := false
-
-	switch {
+	case strings.HasPrefix(trimmed, "=== PAUSE"):
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== PAUSE", "")) + colonSep
+		colour = "yellow"
+	case strings.HasPrefix(trimmed, "=== CONT"):
+		testRunning = strings.TrimSpace(strings.ReplaceAll(trimmed, "=== CONT", "")) + colonSep
+		colour = "yellow"
 	case strings.HasPrefix(trimmed, "--- PASS"):
-		ret = true
+		colour = "green"
 	case strings.HasPrefix(trimmed, "ok"):
-		ret = true
+		colour = "green"
 	case strings.HasPrefix(trimmed, "PASS"):
-		ret = true
-	}
-
-	if ret {
 		colour = "green"
 	}
 
@@ -409,7 +445,7 @@ func showFileLink(line string) {
 		fileName string
 	)
 
-	file = strings.Split(line, ": ")
+	file = strings.Split(line, colonSep)
 	if !verbose || oldGo {
 		fileName = file[0]
 	} else {
@@ -446,6 +482,8 @@ func showFileLink(line string) {
 
 	bbcode.Printf("[yellow]%s[/yellow]\n", text)
 	println()
+
+	totalFails++
 }
 
 /*
@@ -457,7 +495,7 @@ func findTestFiles(lastArg string) {
 		log.Fatal(err)
 	}
 
-	_ = walker(dir, "*_test.go")
+	_ = walker(dir, "*.go")
 }
 
 /*
@@ -465,15 +503,19 @@ walker gets all files in the filterDir and directories below.
 */
 func walker(filterDir, locFilter string) error {
 	filter = locFilter
-	depth = 10
-	orgSlashes = strings.Count(filterDir, "/") + 1 + depth
 	err := filepath.Walk(filterDir, filepath.WalkFunc(walkerFilter))
+
+	for key, value := range skipDirs {
+		if !value {
+			delete(skipDirs, key)
+		}
+	}
 
 	return fmt.Errorf("walker %w", err)
 }
 
 /*
-walkerFilter filtyers all files ojn only the wanted ones.
+walkerFilter filters all files on only the wanted ones.
 */
 func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error) {
 	if walkError != nil {
@@ -490,31 +532,34 @@ func walkerFilter(path string, fileInfo os.FileInfo, walkError error) (err error
 	}
 
 	path = strings.ReplaceAll(path, "\\", "/") // for windows
-	if depth >= 0 {
-		slashes := strings.Count(path, "/")
-		if slashes > orgSlashes {
-			return nil
-		}
-	}
 
 	if strings.Contains(path, "/vendor/") {
 		return nil
 	}
-
-	addTestFuncs(path)
-
-	return nil
-}
-
-func addTestFuncs(path string) {
-	dir, _ := filepath.Abs(filepath.Dir(path))
-	file := strings.ReplaceAll(path, dir+"/", "")
 
 	memFile := ""
 
 	dataBytes, err := os.ReadFile(filepath.Clean(path))
 	if err == nil {
 		memFile = string(dataBytes)
+	}
+
+	if strings.HasSuffix(path, "_test.go") {
+		addTestFuncs(path, memFile)
+		return nil
+	}
+
+	addSkipDir(path, memFile)
+
+	return nil
+}
+
+func addTestFuncs(path, memFile string) {
+	dir, _ := filepath.Abs(filepath.Dir(path))
+
+	checkDir := strings.ReplaceAll(dir, rootDir, "")
+	if _, found := testDirs[checkDir]; !found {
+		testDirs[checkDir] = true
 	}
 
 	fileSet := token.NewFileSet()
@@ -524,11 +569,46 @@ func addTestFuncs(path string) {
 		log.Fatal(err)
 	}
 
+	file := filepath.Base(path)
+
 	for _, f := range node.Decls {
 		funcDecl, ok := f.(*ast.FuncDecl)
 		if ok {
 			functionName := file + "_" + funcDecl.Name.Name
 			testFuncs[functionName] = path
 		}
+	}
+}
+
+// addSkipDir add full packages to the skipdir.
+func addSkipDir(path, memFile string) {
+	fset := token.NewFileSet()
+	// parse the go source file, but only the package clause
+	astFile, err := parser.ParseFile(fset, "", memFile, parser.PackageClauseOnly)
+	if err != nil {
+		return
+	}
+
+	if astFile.Name == nil {
+		return
+	}
+
+	skip := true
+
+	if strings.Contains(memFile, "func ") || strings.Contains(memFile, "func(") {
+		if !strings.Contains(memFile, "DO NOT EDIT") {
+			skip = false
+		}
+	}
+
+	dir, _ := filepath.Abs(filepath.Dir(path))
+	checkDir := strings.ReplaceAll(dir, rootDir, "/"+module)
+
+	if skip {
+		if _, found := skipDirs[checkDir]; !found {
+			skipDirs[checkDir] = skip
+		}
+	} else {
+		skipDirs[checkDir] = skip
 	}
 }
